@@ -1,4 +1,6 @@
 var React = global.React || require('react');
+var $ = global.$ || require('jquery');
+var async = require('async');
 var Formsy = {};
 var validationRules = require('./validationRules.js');
 var formDataToObject = require('form-data-to-object');
@@ -26,6 +28,7 @@ Formsy.Form = React.createClass({
   getInitialState: function () {
     return {
       isValid: true,
+      isValidating: false,
       isSubmitting: false,
       canChange: false
     };
@@ -56,8 +59,13 @@ Formsy.Form = React.createClass({
         detachFromForm: this.detachFromForm,
         validate: this.validate,
         isFormDisabled: this.isFormDisabled,
-        isValidValue: (component, value) => {
-          return this.runValidation(component, value).isValid;
+        isValidValue: (component, value, callback) => {
+          var promise = this.runValidation(component, value);
+          $.when(promise).then(function(validation) {
+            if (callback) {
+              callback(validation.isValid);
+            }
+          })
         }
       }
     }
@@ -114,12 +122,10 @@ Formsy.Form = React.createClass({
   },
 
   mapModel: function (model) {
-
     if (this.props.mapping) {
       return this.props.mapping(model)
     } else {
       return formDataToObject.toObj(Object.keys(model).reduce((mappedModel, key) => {
-
         var keyArray = key.split('.');
         var base = mappedModel;
         while (keyArray.length) {
@@ -128,7 +134,6 @@ Formsy.Form = React.createClass({
         }
 
         return mappedModel;
-
       }, {}));
     }
   },
@@ -230,82 +235,103 @@ Formsy.Form = React.createClass({
       this.props.onChange(this.getCurrentValues(), this.isChanged());
     }
 
-    var validation = this.runValidation(component);
+    var promise = this.runValidation(component);
+
+    component.setState({
+      _isValidating: true,
+      _validation: promise
+    })
+
     // Run through the validations, split them up and call
     // the validator IF there is a value or it is required
-    component.setState({
-      _isValid: validation.isValid,
-      _isRequired: validation.isRequired,
-      _validationError: validation.error,
-      _externalError: null
-    }, this.validateForm);
-
+    $.when(promise).then((validation) => {
+      component.setState({
+        _isValid: validation.isValid,
+        _isValidating: false,
+        _validation: null,
+        _isRequired: validation.isRequired,
+        _validationError: validation.error,
+        _externalError: null
+      }, this.validateForm);
+    })
   },
 
   // Checks validation on current value or a passed value
   runValidation: function (component, value) {
+    var self = this;
+    var deferred = $.Deferred();
 
     var currentValues = this.getCurrentValues();
     var validationErrors = component.props.validationErrors;
     var validationError = component.props.validationError;
     value = arguments.length === 2 ? value : component.state._value;
 
-    var validationResults = this.runRules(value, currentValues, component._validations);
-    var requiredResults = this.runRules(value, currentValues, component._requiredValidations);
+    var validationDeferred = this.runRules(value, currentValues, component._validations);
+    var requiredDeferred = this.runRules(value, currentValues, component._requiredValidations);
 
-    // the component defines an explicit validate function
-    if (typeof component.validate === "function") {
-      validationResults.failed = component.validate() ? [] : ['failed'];
-    }
-
-    var isRequired = Object.keys(component._requiredValidations).length ? !!requiredResults.success.length : false;
-    var isValid = !validationResults.failed.length && !(this.props.validationErrors && this.props.validationErrors[component.props.name]);
-
-    return {
-      isRequired: isRequired,
-      isValid: isRequired ? false : isValid,
-      error: (function () {
-
-        if (isValid && !isRequired) {
-          return emptyArray;
+    $.when(validationDeferred).then(function(validationResults) {
+      $.when(requiredDeferred).then(function(requiredResults) {
+        // the component defines an explicit validate function
+        if (typeof component.validate === "function") {
+          validationResults.failed = component.validate() ? [] : ['failed'];
         }
 
-        if (validationResults.errors.length) {
-          return validationResults.errors;
-        }
+        var isRequired = Object.keys(component._requiredValidations).length ? !!requiredResults.success.length : false;
+        var isValid = !validationResults.failed.length && !(this.props.validationErrors && this.props.validationErrors[component.props.name]);
 
-        if (this.props.validationErrors && this.props.validationErrors[component.props.name]) {
-          return typeof this.props.validationErrors[component.props.name] === 'string' ? [this.props.validationErrors[component.props.name]] : this.props.validationErrors[component.props.name];
-        }
+        deferred.resolveWith(self, [{
+          isRequired: isRequired,
+          isValid: isRequired ? false : isValid,
+          error: (function () {
 
-        if (isRequired) {
-          var error = validationErrors[requiredResults.success[0]];
-          return error ? [error] : null;
-        }
+            if (isValid && !isRequired) {
+              return emptyArray;
+            }
 
-        if (validationResults.failed.length) {
-          return validationResults.failed.map(function(failed) {
-            return validationErrors[failed] ? validationErrors[failed] : validationError;
-          }).filter(function(x, pos, arr) {
-            // Remove duplicates
-            return arr.indexOf(x) === pos;
-          });
-        }
+            if (validationResults.errors.length) {
+              return validationResults.errors;
+            }
 
-      }.call(this))
-    };
+            if (this.props.validationErrors && this.props.validationErrors[component.props.name]) {
+              return typeof this.props.validationErrors[component.props.name] === 'string' ? [this.props.validationErrors[component.props.name]] : this.props.validationErrors[component.props.name];
+            }
 
+            if (isRequired) {
+              var error = validationErrors[requiredResults.success[0]];
+              return error ? [error] : null;
+            }
+
+            if (validationResults.failed.length) {
+              return validationResults.failed.map(function(failed) {
+                return validationErrors[failed] ? validationErrors[failed] : validationError;
+              }).filter(function(x, pos, arr) {
+                // Remove duplicates
+                return arr.indexOf(x) === pos;
+              });
+            }
+
+          }.call(this))
+        }]);
+      });
+    });
+
+    return deferred;
   },
 
   runRules: function (value, currentValues, validations) {
+    var self = this;
+    var deferred = $.Deferred();
 
     var results = {
       errors: [],
       failed: [],
       success: []
     };
+
+    var processed = 0;
+
     if (Object.keys(validations).length) {
-      Object.keys(validations).forEach(function (validationMethod) {
+      Object.keys(validations).forEach((validationMethod) => {
 
         if (validationRules[validationMethod] && typeof validations[validationMethod] === 'function') {
           throw new Error('Formsy does not allow you to override default validations: ' + validationMethod);
@@ -317,35 +343,55 @@ Formsy.Form = React.createClass({
 
         if (typeof validations[validationMethod] === 'function') {
           var validation = validations[validationMethod](currentValues, value);
-          if (typeof validation === 'string') {
-            results.errors.push(validation);
-            results.failed.push(validationMethod);
-          } else if (!validation) {
-            results.failed.push(validationMethod);
-          }
+          $.when(validation).then(function(validationResult) {
+            if (typeof validationResult === 'string') {
+              results.errors.push(validationResult);
+              results.failed.push(validationMethod);
+            } else if (!validation) {
+              results.failed.push(validationMethod);
+            }
+            processed++;
+
+            if (processed == Object.keys(validations).length) {
+              deferred.resolveWith(this, [results])
+            }
+          })
           return;
 
         } else if (typeof validations[validationMethod] !== 'function') {
           var validation = validationRules[validationMethod](currentValues, value, validations[validationMethod]);
-          if (typeof validation === 'string') {
-            results.errors.push(validation);
-            results.failed.push(validationMethod);
-          } else if (!validation) {
-            results.failed.push(validationMethod);
-          } else {
-            results.success.push(validationMethod);
-          }
+          $.when(validation).then((validationResult) => {
+            if (typeof validationResult === 'string') {
+              results.errors.push(validationResult);
+              results.failed.push(validationMethod);
+            } else if (!validationResult) {
+              results.failed.push(validationMethod);
+            } else {
+              results.success.push(validationMethod);
+            }
+            processed++;
+
+            if (processed == Object.keys(validations).length) {
+              deferred.resolveWith(this, [results])
+            }
+          })
           return;
 
         }
 
-        return results.success.push(validationMethod);
+        results.success.push(validationMethod);
+        processed++;
+
+        if (processed == Object.keys(validations).length) {
+          deferred.resolveWith(self, [results]);
+        }
 
       });
+    } else {
+      deferred.resolveWith(this, [results]);
     }
 
-    return results;
-
+    return deferred;
   },
 
   // Validate the form by going through all child input components
@@ -354,56 +400,60 @@ Formsy.Form = React.createClass({
 
     // We need a callback as we are validating all inputs again. This will
     // run when the last component has set its state
-    var onValidationComplete = function () {
-      var allIsValid = this.inputs.every(component => {
-        return component.state._isValid;
-      });
+    var onValidationComplete = function() {
+      async.every(this.inputs, function(component, callback) {
+        if (!component.state._isValidating) {
+          callback(null, component.state._isValid);
+        } else {
+          $.when(component.state._validation).then(function() {
+            callback(null, component.state._isValid);
+          })
+        }
+      }, (err, allIsValid) => {
+        this.setState({ isValid: allIsValid });
 
-      this.setState({
-        isValid: allIsValid
-      });
+        if (allIsValid) {
+          this.props.onValid();
+        } else {
+          this.props.onInvalid();
+        }
 
-      if (allIsValid) {
-        this.props.onValid();
-      } else {
-        this.props.onInvalid();
-      }
-
-      // Tell the form that it can start to trigger change events
-      this.setState({
-        canChange: true
-      });
-
+        // Tell the form that it can start to trigger change events
+        this.setState({ canChange: true });
+      })
     }.bind(this);
 
     // Run validation again in case affected by other inputs. The
     // last component validated will run the onValidationComplete callback
+    var processed = 0;
     this.inputs.forEach((component, index) => {
-      var validation = this.runValidation(component);
-      if (validation.isValid && component.state._externalError) {
-        validation.isValid = false;
-      }
-      component.setState({
-        _isValid: validation.isValid,
-        _isRequired: validation.isRequired,
-        _validationError: validation.error,
-        _externalError: !validation.isValid && component.state._externalError ? component.state._externalError : null
-      }, index === this.inputs.length - 1 ? onValidationComplete : null);
+      var promise = this.runValidation(component);
+      $.when(promise).then((validation) => {
+        if (validation.isValid && component.state._externalError) {
+          validation.isValid = false;
+        }
+
+        processed++;
+
+        component.setState({
+          _isValid: validation.isValid,
+          _isRequired: validation.isRequired,
+          _validationError: validation.error,
+          _externalError: !validation.isValid && component.state._externalError ? component.state._externalError : null
+        }, processed === this.inputs.length ? onValidationComplete : null);
+      })
     });
 
     // If there are no inputs, set state where form is ready to trigger
     // change event. New inputs might be added later
     if (!this.inputs.length && this.isMounted()) {
-      this.setState({
-        canChange: true
-      });
+      this.setState({ canChange: true });
     }
   },
 
   // Method put on each input component to register
   // itself to the form
   attachToForm: function (component) {
-
     if (this.inputs.indexOf(component) === -1) {
       this.inputs.push(component);
     }

@@ -1,9 +1,39 @@
+var $ = global.$ || require('jquery');
+var _ = global._ || require('lodash');
+
 var isExisty = function (value) {
   return value !== null && value !== undefined;
 };
 
 var isEmpty = function (value) {
   return value === '';
+};
+
+// takes a {} object and returns a FormData object
+var objectToFormData = function(obj, form, namespace) {
+  var fd = form || new FormData();
+  var formKey;
+
+  for (var property in obj) {
+    if (obj.hasOwnProperty(property)) {
+      if (namespace) {
+        formKey = namespace + '[' + property + ']';
+      } else {
+        formKey = property;
+      }
+
+      // if the property is an object, but not a File,
+      // use recursivity.
+      if (typeof obj[property] === 'object' && !(obj[property] instanceof File)) {
+        objectToFormData(obj[property], fd, property);
+      } else {
+        // if it's a string or a File object
+        fd.append(formKey, obj[property]);
+      }
+    }
+  }
+
+  return fd;
 };
 
 var validations = {
@@ -72,7 +102,33 @@ var validations = {
   },
   minLength: function (values, value, length) {
     return !isExisty(value) || isEmpty(value) || value.length >= length;
-  }
+  },
+  remote: _.debounce(function (values, value, options) {
+    var fd = new FormData();
+    if (options.data) {
+      fd = objectToFormData(options.data, fd);
+    }
+
+    if (value) {
+      fd.append(options.name, value);
+    }
+
+    var deferred = $.Deferred();
+    $.ajax({
+      type: 'GET',
+      url: options.url,
+      processData: false,
+      data: fd,
+      success: function(response) {
+        if (response) {
+          deferred.resolveWith(null, [true])
+        } else {
+          deferred.resolveWith(null, [false])
+        }
+      }
+    })
+    return deferred;
+  }, 300)
 };
 
 module.exports = validations;

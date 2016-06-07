@@ -37,6 +37,14 @@ const App = React.createClass({
     return (
       <Formsy.Form onSubmit={this.submit} className="custom-validation">
         <MyInput name="year" title="Year of Birth" type="number" validations="isYearOfBirth" validationError="Please type your year of birth" />
+        <MyInput name="username" title="Username" type="text"
+          validations={{
+            remote: {
+              url: "/custom-validation/success.json",
+              name: "username"
+            }
+          }}
+          validationError="Username is already taken" />
         <DynamicInput name="dynamic" title="..." />
         <button type="submit">Submit</button>
       </Formsy.Form>

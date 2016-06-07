@@ -91,7 +91,8 @@ const App = React.createClass({
               {isAlphanumeric: true},
               {equals: 5},
               {minLength: 3},
-              {maxLength: 7}
+              {maxLength: 7},
+              {remote: 'http://www.google.com'}
             ]}
           />
           <MyRadioGroup name="required" value={false} title="Required"

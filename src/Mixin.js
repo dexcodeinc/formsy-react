@@ -36,6 +36,8 @@ module.exports = {
       _value: this.props.value,
       _isRequired: false,
       _isValid: true,
+      _isValidating: false,
+      _validation: null,
       _isPristine: true,
       _pristineValue: this.props.value,
       _validationError: [],
@@ -59,35 +61,21 @@ module.exports = {
 
       // Pass a function instead?
       this.context.formsy.attachToForm(this);
-      //this.props._attachToForm(this);
     }.bind(this);
 
     if (!this.props.name) {
       throw new Error('Form Input requires a name property when used');
     }
 
-    /*
-    if (!this.props._attachToForm) {
-      return setTimeout(function () {
-        if (!this.isMounted()) return;
-        if (!this.props._attachToForm) {
-          throw new Error('Form Mixin requires component to be nested in a Form');
-        }
-        configure();
-      }.bind(this), 0);
-    }
-    */
     configure();
   },
 
   // We have to make the validate method is kept when new props are added
   componentWillReceiveProps: function (nextProps) {
     this.setValidations(nextProps.validations, nextProps.required);
-
   },
 
   componentDidUpdate: function (prevProps) {
-
     // If the value passed has changed, set it. If value is not passed it will
     // internally update, and this will never run
     if (!utils.isSame(this.props.value, prevProps.value)) {
@@ -103,15 +91,12 @@ module.exports = {
   // Detach it when component unmounts
   componentWillUnmount: function () {
     this.context.formsy.detachFromForm(this);
-    //this.props._detachFromForm(this);
   },
 
   setValidations: function (validations, required) {
-
     // Add validations to the store itself as the props object can not be modified
     this._validations = convertValidationsToObject(validations) || {};
     this._requiredValidations = required === true ? {isDefaultRequiredValue: true} : convertValidationsToObject(required);
-
   },
 
   // We validate after the value has been set
@@ -121,7 +106,6 @@ module.exports = {
       _isPristine: false
     }, function () {
       this.context.formsy.validate(this);
-      //this.props._validate(this);
     }.bind(this));
   },
   resetValue: function () {
@@ -130,7 +114,6 @@ module.exports = {
       _isPristine: true
     }, function () {
       this.context.formsy.validate(this);
-      //this.props._validate(this);
     });
   },
   getValue: function () {
@@ -148,7 +131,6 @@ module.exports = {
   },
   isFormDisabled: function () {
     return this.context.formsy.isFormDisabled();
-    //return this.props._isFormDisabled();
   },
   isValid: function () {
     return this.state._isValid;
@@ -168,8 +150,8 @@ module.exports = {
   showError: function () {
     return !this.showRequired() && !this.isValid();
   },
-  isValidValue: function (value) {
-    return this.context.formsy.isValidValue.call(null, this, value);
-    //return this.props._isValidValue.call(null, this, value);
+  isValidValue: function (value, callback) {
+    console.log(callback);
+    this.context.formsy.isValidValue.call(null, this, value, callback);
   }
 };

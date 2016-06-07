@@ -23,6 +23,7 @@
     "react-component"
   ],
   "dependencies": {
+    "async": "^2.0.0-rc.5",
     "form-data-to-object": "^0.2.0"
   },
   "devDependencies": {
@@ -42,6 +43,8 @@
     "webpack-dev-server": "^1.14.1"
   },
   "peerDependencies": {
-    "react": "^0.14.0 || ^15.0.0"
+    "react": "^0.14.0 || ^15.0.0",
+    "jquery": "^2.2.4",
+    "lodash": "^4.13.1"
   }
 }

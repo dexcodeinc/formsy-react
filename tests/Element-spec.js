@@ -1,4 +1,5 @@
 import React from 'react';
+import $ from 'jquery';
 import TestUtils from 'react-addons-test-utils';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import sinon from 'sinon';
@@ -207,10 +208,13 @@ export default {
     const form = TestUtils.renderIntoDocument(<TestForm/>);
 
     const input = TestUtils.findRenderedComponentWithType(form, TestInput);
-    test.equal(input.isValidValue('foo@bar.com'), true);
-    test.equal(input.isValidValue('foo@bar'), false);
-    test.done();
-
+    input.isValidValue('foo@bar.com', function(isValid) {
+      test.equal(isValid, true);
+    });
+    input.isValidValue('foo@bar', function(isValid) {
+      test.equal(isValid, false);
+      test.done();
+    });
   },
 
   'should be able to use an object as validations property': function (test) {
@@ -229,11 +233,13 @@ export default {
     const form = TestUtils.renderIntoDocument(<TestForm/>);
 
     const input = TestUtils.findRenderedComponentWithType(form, TestInput);
-    test.equal(input.isValidValue('foo@bar.com'), true);
-    test.equal(input.isValidValue('foo@bar'), false);
-
-    test.done();
-
+    input.isValidValue('foo@bar.com', function(isValid) {
+      test.equal(isValid, true);
+    });
+    input.isValidValue('foo@bar', function(isValid) {
+      test.equal(isValid, false);
+      test.done();
+    });
   },
 
   'should be able to pass complex values to a validation rule': function (test) {
