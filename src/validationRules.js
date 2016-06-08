@@ -9,6 +9,10 @@ var isEmpty = function (value) {
   return value === '';
 };
 
+var debouncedAjax = function (url, dfd) {
+
+}
+
 var validations = {
   isDefaultRequiredValue: function (values, value) {
     return value === undefined || value === '';
@@ -76,36 +80,70 @@ var validations = {
   minLength: function (values, value, length) {
     return !isExisty(value) || isEmpty(value) || value.length >= length;
   },
-  remote: function (values, value, options) {
-    var params = '';
+  //
+  // The remote validation implemented below implemented debounce for deferred
+  // object. The reason it needs to be implemented manually is because
+  // lodash debounce function doesn't support returning deferred object.
+  //
+  remote: (function(wait) {
+    var timeout;
+    var dfd;
+    var xhr;
 
-    if (options.data) {
-      params = $.param(options.data);
-    }
+    var func = function(values, value, options) {
+      var params = '';
 
-    if (value) {
-      params = (params.length > 0) ? '&' : '' + encodeURIComponent(options.name) + '=' + encodeURIComponent(value)
-    }
-
-    if (params.length > 0) {
-      params = '?' + params;
-    }
-
-    var dfd = $.Deferred();
-    $.ajax({
-      type: 'GET',
-      url: options.url + params,
-      contentType: 'json',
-      success: function(response) {
-        if (response) {
-          dfd.resolve(true)
-        } else {
-          dfd.resolve(false)
-        }
+      if (options.data) {
+        params = $.param(options.data);
       }
-    })
-    return dfd.promise();
-  }
+
+      if (value) {
+        params = (params.length > 0) ? '&' : '' + encodeURIComponent(options.name) + '=' + encodeURIComponent(value)
+      }
+
+      if (params.length > 0) {
+        params = '?' + params;
+      }
+
+      xhr = $.ajax({
+        type: 'GET',
+        url: options.url + params,
+        contentType: 'json',
+        success: function(response) {
+          if (!dfd) {
+            return;
+          }
+          if (typeof response === 'string') {
+            response = JSON.parse(response)
+          }
+          if (response) {
+            dfd.resolveWith(null, [true])
+          } else {
+            dfd.resolveWith(null, [false])
+          }
+          dfd = null;
+        }
+      })
+    }
+
+    return function(values, value, options) {
+      var context = this, args = arguments;
+  		var later = function() {
+  			timeout = null;
+  			func.apply(context, args);
+  		};
+      if (!dfd) {
+        dfd = $.Deferred();
+      }
+  		clearTimeout(timeout);
+      if (xhr) {
+        xhr.abort();
+        xhr = null;
+      }
+  		timeout = setTimeout(later, wait);
+      return dfd;
+    }
+  })(300)
 };
 
 module.exports = validations;

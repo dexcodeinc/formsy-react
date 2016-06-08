@@ -43,7 +43,9 @@ const App = React.createClass({
               name: "user[user_name]"
             }
           }}
-          validationError="Username is already taken" />
+          validationErrors={{
+            remote: "Username already in use"
+          }} />
         <button type="submit">Submit</button>
       </Formsy.Form>
     );
