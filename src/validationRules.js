@@ -9,33 +9,6 @@ var isEmpty = function (value) {
   return value === '';
 };
 
-// takes a {} object and returns a FormData object
-var objectToFormData = function(obj, form, namespace) {
-  var fd = form || new FormData();
-  var formKey;
-
-  for (var property in obj) {
-    if (obj.hasOwnProperty(property)) {
-      if (namespace) {
-        formKey = namespace + '[' + property + ']';
-      } else {
-        formKey = property;
-      }
-
-      // if the property is an object, but not a File,
-      // use recursivity.
-      if (typeof obj[property] === 'object' && !(obj[property] instanceof File)) {
-        objectToFormData(obj[property], fd, property);
-      } else {
-        // if it's a string or a File object
-        fd.append(formKey, obj[property]);
-      }
-    }
-  }
-
-  return fd;
-};
-
 var validations = {
   isDefaultRequiredValue: function (values, value) {
     return value === undefined || value === '';
@@ -103,32 +76,36 @@ var validations = {
   minLength: function (values, value, length) {
     return !isExisty(value) || isEmpty(value) || value.length >= length;
   },
-  remote: _.debounce(function (values, value, options) {
-    var fd = new FormData();
+  remote: function (values, value, options) {
+    var params = '';
+
     if (options.data) {
-      fd = objectToFormData(options.data, fd);
+      params = $.param(options.data);
     }
 
     if (value) {
-      fd.append(options.name, value);
+      params = (params.length > 0) ? '&' : '' + encodeURIComponent(options.name) + '=' + encodeURIComponent(value)
     }
 
-    var deferred = $.Deferred();
+    if (params.length > 0) {
+      params = '?' + params;
+    }
+
+    var dfd = $.Deferred();
     $.ajax({
       type: 'GET',
-      url: options.url,
-      processData: false,
-      data: fd,
+      url: options.url + params,
+      contentType: 'json',
       success: function(response) {
         if (response) {
-          deferred.resolveWith(null, [true])
+          dfd.resolve(true)
         } else {
-          deferred.resolveWith(null, [false])
+          dfd.resolve(false)
         }
       }
     })
-    return deferred;
-  }, 300)
+    return dfd.promise();
+  }
 };
 
 module.exports = validations;

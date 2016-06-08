@@ -36,16 +36,14 @@ const App = React.createClass({
   render() {
     return (
       <Formsy.Form onSubmit={this.submit} className="custom-validation">
-        <MyInput name="year" title="Year of Birth" type="number" validations="isYearOfBirth" validationError="Please type your year of birth" />
         <MyInput name="username" title="Username" type="text"
           validations={{
             remote: {
-              url: "/custom-validation/success.json",
-              name: "username"
+              url: "http://localhost:3000/users/check_username.json",
+              name: "user[user_name]"
             }
           }}
           validationError="Username is already taken" />
-        <DynamicInput name="dynamic" title="..." />
         <button type="submit">Submit</button>
       </Formsy.Form>
     );
@@ -66,7 +64,6 @@ const DynamicInput = React.createClass({
   },
   validate() {
     const value = this.getValue();
-    console.log(value, this.state.validationType);
     return value ? validators[this.state.validationType].regexp.test(value) : true;
   },
   getCustomErrorMessage() {

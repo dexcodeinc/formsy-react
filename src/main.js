@@ -315,7 +315,7 @@ Formsy.Form = React.createClass({
       });
     });
 
-    return deferred;
+    return deferred.promise();
   },
 
   runRules: function (value, currentValues, validations) {
@@ -383,7 +383,7 @@ Formsy.Form = React.createClass({
         processed++;
 
         if (processed == Object.keys(validations).length) {
-          deferred.resolveWith(self, [results]);
+          deferred.resolveWith(this, [results]);
         }
 
       });
@@ -391,7 +391,7 @@ Formsy.Form = React.createClass({
       deferred.resolveWith(this, [results]);
     }
 
-    return deferred;
+    return deferred.promise();
   },
 
   // Validate the form by going through all child input components

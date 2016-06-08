@@ -151,7 +151,6 @@ module.exports = {
     return !this.showRequired() && !this.isValid();
   },
   isValidValue: function (value, callback) {
-    console.log(callback);
     this.context.formsy.isValidValue.call(null, this, value, callback);
   }
 };
